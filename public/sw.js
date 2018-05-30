@@ -1,5 +1,8 @@
-var CACHE_STATIC_NAME = 'static-v15';
-var CACHE_DYNAMIC_NAME = 'dynamic-v2';
+importScripts("src/js/idb.js");
+importScripts("src/js/util.js");
+
+var CACHE_STATIC_NAME = 'static-v16';
+var CACHE_DYNAMIC_NAME = 'dynamic-v3';
 var STATIC_FILES = [
   '/',
   '/index.html',
@@ -8,6 +11,7 @@ var STATIC_FILES = [
   '/src/js/feed.js',
   '/src/js/promise.js',
   '/src/js/fetch.js',
+  'src/js/idb.js',
   '/src/js/material.min.js',
   '/src/css/app.css',
   '/src/css/feed.css',
@@ -16,6 +20,7 @@ var STATIC_FILES = [
   'https://fonts.googleapis.com/icon?family=Material+Icons',
   'https://cdnjs.cloudflare.com/ajax/libs/material-design-lite/1.3.0/material.indigo-pink.min.css'
 ];
+
 
 // function trimCache(cacheName, maxItems) {
 //   caches.open(cacheName)
@@ -34,10 +39,10 @@ self.addEventListener('install', function (event) {
   console.log('[Service Worker] Installing Service Worker ...', event);
   event.waitUntil(
     caches.open(CACHE_STATIC_NAME)
-      .then(function (cache) {
-        console.log('[Service Worker] Precaching App Shell');
-        cache.addAll(STATIC_FILES);
-      })
+    .then(function (cache) {
+      console.log('[Service Worker] Precaching App Shell');
+      cache.addAll(STATIC_FILES);
+    })
   )
 });
 
@@ -45,14 +50,14 @@ self.addEventListener('activate', function (event) {
   console.log('[Service Worker] Activating Service Worker ....', event);
   event.waitUntil(
     caches.keys()
-      .then(function (keyList) {
-        return Promise.all(keyList.map(function (key) {
-          if (key !== CACHE_STATIC_NAME && key !== CACHE_DYNAMIC_NAME) {
-            console.log('[Service Worker] Removing old cache.', key);
-            return caches.delete(key);
-          }
-        }));
-      })
+    .then(function (keyList) {
+      return Promise.all(keyList.map(function (key) {
+        if (key !== CACHE_STATIC_NAME && key !== CACHE_DYNAMIC_NAME) {
+          console.log('[Service Worker] Removing old cache.', key);
+          return caches.delete(key);
+        }
+      }));
+    })
   );
   return self.clients.claim();
 });
@@ -72,16 +77,20 @@ self.addEventListener('fetch', function (event) {
 
   var url = 'https://pwatest-c4e24.firebaseio.com/posts';
   if (event.request.url.indexOf(url) > -1) {
-    event.respondWith(
-      caches.open(CACHE_DYNAMIC_NAME)
-        .then(function (cache) {
-          return fetch(event.request)
-            .then(function (res) {
-              // trimCache(CACHE_DYNAMIC_NAME, 3);
-              cache.put(event.request, res.clone());
-              return res;
-            });
-        })
+    event.respondWith(fetch(event.request)
+      .then(function (res) {
+        var clonedRes = res.clone();
+        clearAllData('posts')
+          .then(function () {
+            return clonedRes.json()
+          })
+          .then(function (data) {
+            for (var key in data) {
+              writeData('posts', data[key])
+            }
+          })
+        return res;
+      })
     );
   } else if (isInArray(event.request.url, STATIC_FILES)) {
     event.respondWith(
@@ -90,29 +99,29 @@ self.addEventListener('fetch', function (event) {
   } else {
     event.respondWith(
       caches.match(event.request)
-        .then(function (response) {
-          if (response) {
-            return response;
-          } else {
-            return fetch(event.request)
-              .then(function (res) {
-                return caches.open(CACHE_DYNAMIC_NAME)
-                  .then(function (cache) {
-                    // trimCache(CACHE_DYNAMIC_NAME, 3);
-                    cache.put(event.request.url, res.clone());
-                    return res;
-                  })
-              })
-              .catch(function (err) {
-                return caches.open(CACHE_STATIC_NAME)
-                  .then(function (cache) {
-                    if (event.request.headers.get('accept').includes('text/html')) {
-                      return cache.match('/offline.html');
-                    }
-                  });
-              });
-          }
-        })
+      .then(function (response) {
+        if (response) {
+          return response;
+        } else {
+          return fetch(event.request)
+            .then(function (res) {
+              return caches.open(CACHE_DYNAMIC_NAME)
+                .then(function (cache) {
+                  // trimCache(CACHE_DYNAMIC_NAME, 3);
+                  cache.put(event.request.url, res.clone());
+                  return res;
+                })
+            })
+            .catch(function (err) {
+              return caches.open(CACHE_STATIC_NAME)
+                .then(function (cache) {
+                  if (event.request.headers.get('accept').includes('text/html')) {
+                    return cache.match('/offline.html');
+                  }
+                });
+            });
+        }
+      })
     );
   }
 });
