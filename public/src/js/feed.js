@@ -102,10 +102,10 @@ fetch(url)
     networkDataReceived = true;
     console.log('From web', data);
     var dataArray = [];
-    for (key in data) {
+    for (var key in data) {
       dataArray.push(data[key]);
     }
-    createCard(dataArray);
+    updateUI(dataArray);
   });
 
 if ('caches' in window) {
@@ -122,7 +122,7 @@ if ('caches' in window) {
         for (key in data) {
           dataArray.push(data[key]);
         }
-        createCard(dataArray);
+        updateUI(dataArray);
       }
     });
 }
